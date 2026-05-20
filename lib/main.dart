@@ -5,6 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'pages/event_viewer_page.dart';
 import 'services/notification_service.dart';
+import 'theme/tokens.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,19 +32,14 @@ Future<void> main() async {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  static const _bg = Color(0xFFF6F8FA);
-  static const _primary = Color(0xFF0E9AAB);
-  static const _border = Color(0xFFE5EAF0);
-  static const _ink = Color(0xFF0F172A);
-
   @override
   Widget build(BuildContext context) {
     final base = ThemeData(
       useMaterial3: true,
-      scaffoldBackgroundColor: _bg,
+      scaffoldBackgroundColor: AppColors.bg,
       colorScheme: ColorScheme.fromSeed(
-        seedColor: _primary,
-        surface: Colors.white,
+        seedColor: AppColors.primary,
+        surface: AppColors.surface,
         brightness: Brightness.light,
       ),
     );
@@ -59,21 +55,21 @@ class MyApp extends StatelessWidget {
       supportedLocales: const [Locale('ko', 'KR'), Locale('en', 'US')],
       theme: base.copyWith(
         textTheme: GoogleFonts.notoSansKrTextTheme(base.textTheme).apply(
-          bodyColor: _ink,
-          displayColor: _ink,
+          bodyColor: AppColors.ink,
+          displayColor: AppColors.ink,
         ),
         cardTheme: CardThemeData(
-          color: Colors.white,
+          color: AppColors.surface,
           elevation: 0,
           margin: EdgeInsets.zero,
           surfaceTintColor: Colors.transparent,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: const BorderSide(color: _border),
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            side: const BorderSide(color: AppColors.border),
           ),
         ),
         appBarTheme: const AppBarTheme(
-          backgroundColor: _bg,
+          backgroundColor: AppColors.bg,
           elevation: 0,
           scrolledUnderElevation: 0,
           surfaceTintColor: Colors.transparent,
@@ -83,9 +79,9 @@ class MyApp extends StatelessWidget {
             statusBarIconBrightness: Brightness.dark,
           ),
         ),
-        dividerColor: _border,
+        dividerColor: AppColors.border,
         dividerTheme: const DividerThemeData(
-          color: _border,
+          color: AppColors.border,
           thickness: 1,
           space: 1,
         ),

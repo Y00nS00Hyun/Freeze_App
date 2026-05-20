@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/events.dart';
 import '../services/ws_client.dart';
 import '../services/notification_service.dart';
+import '../theme/tokens.dart';
 import '../widgets/yamnet_card.dart';
 import '../widgets/clova_panel.dart';
 import 'yolo_page.dart';
@@ -103,19 +104,7 @@ class _EventViewerPageState extends State<EventViewerPage> {
 
     if (_isHolding && !isDanger) return;
 
-    _yam = YamnetEvent(
-      event: e.event,
-      source: e.source,
-      label: label,
-      confidence: e.confidence,
-      direction: e.direction,
-      energy: e.energy,
-      ms: e.ms,
-      danger: e.danger,
-      group: e.group,
-      dbfs: e.dbfs,
-      latencySec: e.latencySec,
-    );
+    _yam = e.copyWith(label: label);
 
     if (isDanger) {
       _holdYam = _yam;
@@ -221,7 +210,7 @@ class _EventViewerPageState extends State<EventViewerPage> {
     final connected = _wsState == 'connected';
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FA),
+      backgroundColor: AppColors.bg,
       appBar: AppBar(
         titleSpacing: 20,
         title: const BrandMark(),
@@ -232,13 +221,13 @@ class _EventViewerPageState extends State<EventViewerPage> {
             tooltip: 'YOLO 결과 보기',
             onPressed: _openYoloPage,
             icon: const Icon(Icons.photo_library_outlined),
-            color: const Color(0xFF475569),
+            color: AppColors.iconMuted,
           ),
           const SizedBox(width: 8),
         ],
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
-          child: Divider(height: 1, color: Color(0xFFE5EAF0)),
+          child: Divider(height: 1, color: AppColors.border),
         ),
       ),
       body: SafeArea(
@@ -297,11 +286,7 @@ class BrandMark extends StatelessWidget {
           height: 30,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(9),
-            gradient: const LinearGradient(
-              colors: [Color(0xFF0E9AAB), Color(0xFF18C0D2)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+            gradient: AppGradients.brand,
           ),
           child: const Icon(
             Icons.graphic_eq_rounded,
@@ -316,7 +301,7 @@ class BrandMark extends StatelessWidget {
             fontSize: 15,
             fontWeight: FontWeight.w700,
             letterSpacing: -0.2,
-            color: const Color(0xFF0F172A),
+            color: AppColors.ink,
           ),
         ),
       ],
@@ -330,14 +315,14 @@ class ConnectionPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = connected ? const Color(0xFF10B981) : const Color(0xFFEAB308);
+    final color = connected ? AppColors.success : AppColors.warning;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 6),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.circular(AppRadius.pill),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -376,9 +361,9 @@ class _IdleStatusCard extends StatelessWidget {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFE5EAF0)),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        border: Border.all(color: AppColors.border),
       ),
       padding: const EdgeInsets.all(28),
       child: Column(
@@ -389,12 +374,12 @@ class _IdleStatusCard extends StatelessWidget {
             height: 96,
             decoration: const BoxDecoration(
               shape: BoxShape.circle,
-              color: Color(0xFFE6F6F8),
+              color: AppColors.primarySoft,
             ),
             child: Icon(
               connected ? Icons.hearing_outlined : Icons.wifi_tethering_rounded,
               size: 44,
-              color: const Color(0xFF0E9AAB),
+              color: AppColors.primary,
             ),
           ),
           const SizedBox(height: 20),
@@ -403,7 +388,7 @@ class _IdleStatusCard extends StatelessWidget {
             style: const TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w700,
-              color: Color(0xFF0F172A),
+              color: AppColors.ink,
             ),
           ),
           const SizedBox(height: 8),
@@ -413,7 +398,7 @@ class _IdleStatusCard extends StatelessWidget {
                 : '서버에 연결하고 있습니다',
             style: const TextStyle(
               fontSize: 14,
-              color: Color(0xFF64748B),
+              color: AppColors.textSecondary,
               height: 1.5,
             ),
             textAlign: TextAlign.center,

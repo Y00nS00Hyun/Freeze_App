@@ -223,6 +223,34 @@ class YamnetEvent extends EventBase {
     this.latencySec,
   });
 
+  YamnetEvent copyWith({
+    String? event,
+    String? source,
+    String? label,
+    double? confidence,
+    num? direction,
+    num? energy,
+    int? ms,
+    bool? danger,
+    String? group,
+    double? dbfs,
+    double? latencySec,
+  }) {
+    return YamnetEvent(
+      event: event ?? this.event,
+      source: source ?? this.source,
+      label: label ?? this.label,
+      confidence: confidence ?? this.confidence,
+      direction: direction ?? this.direction,
+      energy: energy ?? this.energy,
+      ms: ms ?? this.ms,
+      danger: danger ?? this.danger,
+      group: group ?? this.group,
+      dbfs: dbfs ?? this.dbfs,
+      latencySec: latencySec ?? this.latencySec,
+    );
+  }
+
   factory YamnetEvent.fromJson(Map<String, dynamic> j) {
     final label = ((j['label'] ?? j['name'])?.toString().trim() ??
             _headText((j['raw'] ?? j['cat'])?.toString()) ??

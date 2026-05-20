@@ -1,6 +1,7 @@
 // lib/pages/yolo_page.dart
 import 'package:flutter/material.dart';
 import '../models/events.dart';
+import '../theme/tokens.dart';
 import '../utils/yolo_utils.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/yolo_card.dart';
@@ -173,26 +174,26 @@ class _YoloPageState extends State<YoloPage> {
     return AppBar(
       titleSpacing: 8,
       title: const BrandMark(),
-      iconTheme: const IconThemeData(color: Color(0xFF475569)),
+      iconTheme: const IconThemeData(color: AppColors.iconMuted),
       actions: [
         IconButton(
           tooltip: '날짜 선택',
           onPressed: () => _pickDate(widget.items),
           icon: const Icon(Icons.calendar_today_outlined),
-          color: const Color(0xFF475569),
+          color: AppColors.iconMuted,
         ),
         if (_selectedDate != null)
           IconButton(
             tooltip: '필터 해제',
             onPressed: () => setState(() => _selectedDate = null),
             icon: const Icon(Icons.filter_alt_off_outlined),
-            color: const Color(0xFF475569),
+            color: AppColors.iconMuted,
           ),
         const SizedBox(width: 8),
       ],
       bottom: const PreferredSize(
         preferredSize: Size.fromHeight(1),
-        child: Divider(height: 1, color: Color(0xFFE5EAF0)),
+        child: Divider(height: 1, color: AppColors.border),
       ),
     );
   }
@@ -203,14 +204,14 @@ class _YoloPageState extends State<YoloPage> {
 
     if (rows.isEmpty) {
       return Scaffold(
-        backgroundColor: const Color(0xFFF6F8FA),
+        backgroundColor: AppColors.bg,
         appBar: _buildAppBar(),
         body: const EmptyState(message: '현재 등록된 사진이 없습니다'),
       );
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FA),
+      backgroundColor: AppColors.bg,
       appBar: _buildAppBar(),
       body: SafeArea(
         child: Center(
@@ -264,7 +265,7 @@ class _SectionHeader extends StatelessWidget {
             width: 4,
             height: 18,
             decoration: BoxDecoration(
-              color: const Color(0xFF0E9AAB),
+              color: AppColors.primary,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -275,7 +276,7 @@ class _SectionHeader extends StatelessWidget {
               fontSize: 15,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.2,
-              color: Color(0xFF0F172A),
+              color: AppColors.ink,
             ),
           ),
         ],
@@ -307,9 +308,9 @@ class _SelectedDateChip extends StatelessWidget {
                 vertical: 8,
               ),
               decoration: BoxDecoration(
-                color: const Color(0xFFE6F6F8),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: const Color(0xFFB7D7DE)),
+                color: AppColors.primarySoft,
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                border: Border.all(color: AppColors.primarySoftBorder),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -317,7 +318,7 @@ class _SelectedDateChip extends StatelessWidget {
                   const Icon(
                     Icons.calendar_today_rounded,
                     size: 14,
-                    color: Color(0xFF0E9AAB),
+                    color: AppColors.primary,
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -325,14 +326,14 @@ class _SelectedDateChip extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF0E9AAB),
+                      color: AppColors.primary,
                     ),
                   ),
                   const SizedBox(width: 8),
                   const Icon(
                     Icons.close_rounded,
                     size: 14,
-                    color: Color(0xFF0E9AAB),
+                    color: AppColors.primary,
                   ),
                 ],
               ),

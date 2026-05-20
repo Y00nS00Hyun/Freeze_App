@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../theme/tokens.dart';
 
 /// 공용 YOLO 카드
 /// - 이미지 로드 성공 시에만 렌더링(프로빙)
@@ -102,9 +103,9 @@ class _YoloCardState extends State<YoloCard> {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE5EAF0)),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.border),
       ),
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -114,7 +115,7 @@ class _YoloCardState extends State<YoloCard> {
             GestureDetector(
               onTap: hasLink ? () => _openExternal(context) : null,
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(AppRadius.sm + 2),
                 child: AspectRatio(
                   aspectRatio: 16 / 11,
                   child: Image.network(widget.imageUrl, fit: BoxFit.cover),
@@ -131,7 +132,7 @@ class _YoloCardState extends State<YoloCard> {
                       style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF64748B),
+                        color: AppColors.textSecondary,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -142,14 +143,14 @@ class _YoloCardState extends State<YoloCard> {
                     icon: const Icon(Icons.download_rounded, size: 16),
                     label: const Text('다운로드'),
                     style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFF0E9AAB),
-                      backgroundColor: const Color(0xFFE6F6F8),
+                      foregroundColor: AppColors.primary,
+                      backgroundColor: AppColors.primarySoft,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 14,
                         vertical: 8,
                       ),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(999),
+                        borderRadius: BorderRadius.circular(AppRadius.pill),
                       ),
                       textStyle: const TextStyle(
                         fontSize: 13,

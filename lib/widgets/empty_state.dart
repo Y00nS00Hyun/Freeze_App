@@ -1,5 +1,6 @@
 // lib/widgets/empty_state.dart
 import 'package:flutter/material.dart';
+import '../theme/tokens.dart';
 
 class EmptyState extends StatelessWidget {
   const EmptyState({
@@ -22,16 +23,16 @@ class EmptyState extends StatelessWidget {
             height: 88,
             decoration: const BoxDecoration(
               shape: BoxShape.circle,
-              color: Color(0xFFE6F6F8),
+              color: AppColors.primarySoft,
             ),
-            child: Icon(icon, size: 40, color: const Color(0xFF0E9AAB)),
+            child: Icon(icon, size: 40, color: AppColors.primary),
           ),
           const SizedBox(height: 16),
           Text(
             message,
             style: const TextStyle(
               fontSize: 14,
-              color: Color(0xFF64748B),
+              color: AppColors.textSecondary,
               fontWeight: FontWeight.w500,
             ),
           ),

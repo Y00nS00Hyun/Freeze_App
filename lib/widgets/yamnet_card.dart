@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/events.dart';
+import '../theme/tokens.dart';
 
 /// YAMNet 이벤트 표시 카드 (위험 라벨은 7초간 유지)
 class YamnetCard extends StatefulWidget {
@@ -13,21 +14,19 @@ class YamnetCard extends StatefulWidget {
   static const Duration _delayHold = Duration(seconds: 7);
 
   // 일부 서버 응답이 '{label: x, conf: y}' 형태의 문자열 라벨을 보내는 경우 대비
-  static (String, double) _normalizeLabelAndConf(String rawLabel, double rawConf) {
+  static String _normalizeLabel(String rawLabel) {
     final s = rawLabel.trim();
     if (s.startsWith('{')) {
       try {
         final decoded = jsonDecode(s);
         if (decoded is Map) {
-          final label = (decoded['label'] ?? rawLabel).toString();
-          final conf = (decoded['conf'] ?? decoded['confidence']) as num?;
-          return (_stripQuotes(label), conf?.toDouble() ?? rawConf);
+          return _stripQuotes((decoded['label'] ?? rawLabel).toString());
         }
       } catch (_) {
         // 무시: 일반 문자열로 처리
       }
     }
-    return (_stripQuotes(s), rawConf);
+    return _stripQuotes(s);
   }
 
   static String _stripQuotes(String v) {
@@ -97,7 +96,7 @@ class _YamnetCardState extends State<YamnetCard>
       return;
     }
 
-    final (label, _) = YamnetCard._normalizeLabelAndConf(e.label, e.confidence);
+    final label = YamnetCard._normalizeLabel(e.label);
     final isDanger = e.danger ?? !YamnetCard._isNonDanger(label);
 
     if (isDanger) {
@@ -166,7 +165,7 @@ class _YamnetCardState extends State<YamnetCard>
     final e = widget.event;
     if (e == null) return const SizedBox.shrink();
 
-    final (label, _) = YamnetCard._normalizeLabelAndConf(e.label, e.confidence);
+    final label = YamnetCard._normalizeLabel(e.label);
 
     final rawDirDeg = _parseDirection(e.direction);
     final dirDeg = (rawDirDeg == null || !rawDirDeg.isFinite)
@@ -182,19 +181,16 @@ class _YamnetCardState extends State<YamnetCard>
         ? (_isDelayActive && isNonDanger ? (_lastDangerKo ?? ko) : ko)
         : '안전';
 
-    final accent = effectiveIsDanger
-        ? const Color(0xFFE11D48)
-        : const Color(0xFF10B981);
-    final accentSoft = effectiveIsDanger
-        ? const Color(0xFFFEF1F3)
-        : const Color(0xFFE8F8F1);
+    final accent = effectiveIsDanger ? AppColors.danger : AppColors.success;
+    final accentSoft =
+        effectiveIsDanger ? AppColors.dangerSoft : AppColors.successSoft;
 
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFE5EAF0)),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
             color: accent.withValues(alpha: 0.06),
@@ -240,9 +236,9 @@ class _YamnetCardState extends State<YamnetCard>
                   vertical: 14,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF6F8FA),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: const Color(0xFFE5EAF0)),
+                  color: AppColors.surfaceMuted,
+                  borderRadius: BorderRadius.circular(AppRadius.md + 2),
+                  border: Border.all(color: AppColors.border),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -258,7 +254,7 @@ class _YamnetCardState extends State<YamnetCard>
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 0.6,
-                            color: Color(0xFF94A3B8),
+                            color: AppColors.textMuted,
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -267,7 +263,7 @@ class _YamnetCardState extends State<YamnetCard>
                           style: const TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.w800,
-                            color: Color(0xFF0F172A),
+                            color: AppColors.ink,
                           ),
                         ),
                       ],
@@ -299,7 +295,7 @@ class _StatusPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: soft,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -430,8 +426,8 @@ class _Compass extends StatelessWidget {
       height: 72,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: Colors.white,
-        border: Border.all(color: const Color(0xFFE5EAF0), width: 1.5),
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.border, width: 1.5),
       ),
       alignment: Alignment.center,
       child: Transform(
