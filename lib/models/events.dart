@@ -1,6 +1,5 @@
 // lib/models/events.dart
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show debugPrint;
 
 /// 모든 수신 이벤트의 공통 베이스
 abstract class EventBase {
@@ -13,20 +12,12 @@ abstract class EventBase {
   factory EventBase.fromJson(Map<String, dynamic> j) {
     final src = (j['source'] ?? '').toString().toLowerCase();
     final ty = (j['type'] ?? j['event'] ?? '').toString().toLowerCase();
-    final ev = (j['event'] ?? j['type'] ?? '').toString().toLowerCase();
 
-    debugPrint('[EVT][RAW.keys] ${j.keys.toList()}');
-    debugPrint(
-      '[EVT][RAW.route] src="$src" ty="$ty" ev="$ev" '
-      'hasTranscript=${j.containsKey('transcript')}',
-    );
-
-    // 1) YOLO 먼저
+    // 1) YOLO
     if (src == 'yolo' ||
         ty == 'yolo' ||
         ty == 'snapshot' ||
         ty == 'yolo_recording_done') {
-      debugPrint('[EVT][ROUTE] -> YOLO');
       return YoloEvent.fromJson(j);
     }
 
@@ -37,38 +28,24 @@ abstract class EventBase {
         ty == 'stt' ||
         ty == 'whisper' ||
         ty == 'transcript' ||
-        ev == 'transcript' ||
         j.containsKey('transcript')) {
-      debugPrint('[EVT][ROUTE] -> CLOVA/WHISPER (STT)');
       return ClovaEvent.fromJson(j);
     }
 
-    // 3) YAMNet
-    final hasYamKeys =
-        j.containsKey('cat') ||
+    // 3) YAMNet (명시적 src/type 또는 분류 결과 키가 있는 경우만)
+    final hasClassification = j.containsKey('cat') ||
         j.containsKey('raw') ||
         j.containsKey('danger') ||
         j.containsKey('group') ||
-        j.containsKey('dbfs') ||
-        j.containsKey('latency') ||
         ((j.containsKey('label') || j.containsKey('name')) &&
             (j.containsKey('confidence') ||
                 j.containsKey('conf') ||
-                j.containsKey('score'))) ||
-        (j.containsKey('direction') ||
-            j.containsKey('dir') ||
-            j.containsKey('energy') ||
-            j.containsKey('rms') ||
-            j.containsKey('db')) ||
-        (j.containsKey('ms') || j.containsKey('timestamp'));
+                j.containsKey('score')));
 
-    if (src == 'yamnet' || ty == 'yamnet' || hasYamKeys) {
-      debugPrint('[EVT][ROUTE] -> YAMNet');
+    if (src == 'yamnet' || ty == 'yamnet' || hasClassification) {
       return YamnetEvent.fromJson(j);
     }
 
-    // 4) Unknown
-    debugPrint('[EVT][ROUTE] -> UNKNOWN (src="$src" ty="$ty" ev="$ev")');
     return UnknownEvent(j);
   }
 
@@ -90,6 +67,9 @@ num? _asNumNullable(dynamic v) {
   return num.tryParse(v.toString());
 }
 
+double? _asDoubleNullable(dynamic v) => _asNumNullable(v)?.toDouble();
+int? _asIntNullable(dynamic v) => _asNumNullable(v)?.toInt();
+
 List<num> _asNumList(dynamic v) => (v is List)
     ? v.map<num>((e) => _asNumNullable(e) ?? 0).toList(growable: false)
     : const <num>[];
@@ -104,18 +84,24 @@ double? _extractParenScore(String? s) {
   if (s == null) return null;
   final i = s.indexOf('(');
   final j = s.indexOf(')', i + 1);
-  if (i >= 0 && j > i) {
-    return double.tryParse(s.substring(i + 1, j));
-  }
+  if (i >= 0 && j > i) return double.tryParse(s.substring(i + 1, j));
   return null;
 }
 
 double? _parseLatencySeconds(dynamic v) {
   if (v == null) return null;
   if (v is num) return v.toDouble();
-  final s = v.toString();
-  final numStr = s.replaceAll(RegExp('[^0-9\\.-]'), '');
+  final numStr = v.toString().replaceAll(RegExp(r'[^0-9\.\-]'), '');
   return double.tryParse(numStr);
+}
+
+double? _parsePercentish(dynamic v) {
+  if (v == null) return null;
+  if (v is num) return v.toDouble();
+  final s = v.toString().trim();
+  final n = double.tryParse(s.replaceAll('%', ''));
+  if (n == null) return null;
+  return s.endsWith('%') ? n / 100.0 : n;
 }
 
 /// ─────────────────────────────────────────────────────────────────
@@ -128,7 +114,7 @@ class YoloEvent extends EventBase {
   final String? file;
   final String? thumbnail;
 
-  YoloEvent({
+  const YoloEvent({
     required super.event,
     required super.source,
     required this.label,
@@ -142,20 +128,18 @@ class YoloEvent extends EventBase {
   factory YoloEvent.fromJson(Map<String, dynamic> j) {
     final ty = (j['type'] ?? j['event'] ?? '').toString().toLowerCase();
     final dataUrl = j['data']?.toString();
+    final rawTime = j['time'] ?? j['ts'] ?? j['timestamp'];
 
     return YoloEvent(
       event: (j['event'] ?? j['type'] ?? '').toString(),
       source: (j['source'] ?? 'yolo').toString(),
-      label:
-          (j['group_label'] ??
-                  j['label'] ??
-                  (ty == 'snapshot' ? 'snapshot' : ''))
-              .toString(),
-      confidence: _asDouble(j['group_conf'] ?? j['confidence'] ?? 0),
+      label: (j['group_label'] ??
+              j['label'] ??
+              (ty == 'snapshot' ? 'snapshot' : ''))
+          .toString(),
+      confidence: _asDouble(j['group_conf'] ?? j['confidence']),
       bbox: _asNumList(j['bbox']),
-      time: (j['time'] ?? j['ts'] ?? j['timestamp']) == null
-          ? null
-          : _asInt(j['time'] ?? j['ts'] ?? j['timestamp']),
+      time: rawTime == null ? null : _asInt(rawTime),
       file: _pickFileUrl(j) ?? dataUrl,
       thumbnail: (j['thumbnail'] ?? j['thumb'] ?? dataUrl)?.toString(),
     );
@@ -179,7 +163,7 @@ class YoloEvent extends EventBase {
 /// ─────────────────────────────────────────────────────────────────
 /// STT(Clova/Whisper/Transcript) 이벤트
 class ClovaEvent extends EventBase {
-  final String text; // 화면에 보여줄 문장
+  final String text;
   final String? kind;
   final int? sr;
   final double? dur;
@@ -196,24 +180,14 @@ class ClovaEvent extends EventBase {
   });
 
   factory ClovaEvent.fromJson(Map<String, dynamic> j) {
-    final t = (j['transcript'] ?? j['text'] ?? j['sentence'] ?? '').toString();
-    final ev = (j['event'] ?? j['type'] ?? 'transcript').toString();
-    final src = (j['source'] ?? 'clova').toString();
-    debugPrint('[CLOVA][PARSE] src=$src ev=$ev text="$t"');
     return ClovaEvent(
-      event: ev,
-      source: src,
-      text: t,
+      event: (j['event'] ?? j['type'] ?? 'transcript').toString(),
+      source: (j['source'] ?? 'clova').toString(),
+      text: (j['transcript'] ?? j['text'] ?? j['sentence'] ?? '').toString(),
       kind: j['kind']?.toString(),
-      sr: (j['sr'] is int)
-          ? j['sr'] as int
-          : int.tryParse(j['sr']?.toString() ?? ''),
-      dur: (j['dur'] is num)
-          ? (j['dur'] as num).toDouble()
-          : double.tryParse(j['dur']?.toString() ?? ''),
-      dbfs: (j['dbfs'] is num)
-          ? (j['dbfs'] as num).toDouble()
-          : double.tryParse(j['dbfs']?.toString() ?? ''),
+      sr: _asIntNullable(j['sr']),
+      dur: _asDoubleNullable(j['dur']),
+      dbfs: _asDoubleNullable(j['dbfs']),
     );
   }
 
@@ -250,51 +224,32 @@ class YamnetEvent extends EventBase {
   });
 
   factory YamnetEvent.fromJson(Map<String, dynamic> j) {
-    String? label = (j['label'] ?? j['name'])?.toString().trim();
-    label ??= _headText((j['raw'] ?? j['cat'])?.toString());
+    final label = ((j['label'] ?? j['name'])?.toString().trim() ??
+            _headText((j['raw'] ?? j['cat'])?.toString()) ??
+            '')
+        .trim();
 
-    double? _numMaybePercent(dynamic v) {
-      if (v == null) return null;
-      if (v is num) return v.toDouble();
-      final s = v.toString().trim();
-      final n = double.tryParse(s.replaceAll('%', ''));
-      if (n == null) return null;
-      return s.endsWith('%') ? n / 100.0 : n;
-    }
-
-    double conf =
-        _numMaybePercent(j['confidence']) ??
-        _numMaybePercent(j['conf']) ??
-        _numMaybePercent(j['score']) ??
+    var conf = _parsePercentish(j['confidence']) ??
+        _parsePercentish(j['conf']) ??
+        _parsePercentish(j['score']) ??
         _extractParenScore(j['raw']?.toString()) ??
         _extractParenScore(j['cat']?.toString()) ??
         0.0;
-
     if (conf > 1.0) conf = conf / 100.0;
     conf = conf.clamp(0.0, 1.0);
-
-    final dir = _asNumNullable(j['direction'] ?? j['dir']);
-    final energy = _asNumNullable(j['energy'] ?? j['rms'] ?? j['db']);
-    final ms = (j['ms'] == null)
-        ? (j['timestamp'] is int ? j['timestamp'] as int : null)
-        : _asInt(j['ms']);
-    final danger = (j['danger'] is bool) ? j['danger'] as bool : null;
-    final group = j['group']?.toString();
-    final dbfs = _asNumNullable(j['dbfs'])?.toDouble();
-    final latency = _parseLatencySeconds(j['latency']);
 
     return YamnetEvent(
       event: (j['event'] ?? j['type'] ?? 'yamnet').toString(),
       source: (j['source'] ?? 'yamnet').toString(),
-      label: (label ?? '').trim(),
+      label: label,
       confidence: conf,
-      direction: dir,
-      energy: energy,
-      ms: ms,
-      danger: danger,
-      group: group,
-      dbfs: dbfs,
-      latencySec: latency,
+      direction: _asNumNullable(j['direction'] ?? j['dir']),
+      energy: _asNumNullable(j['energy'] ?? j['rms'] ?? j['db']),
+      ms: _asIntNullable(j['ms'] ?? j['timestamp']),
+      danger: j['danger'] is bool ? j['danger'] as bool : null,
+      group: j['group']?.toString(),
+      dbfs: _asDoubleNullable(j['dbfs']),
+      latencySec: _parseLatencySeconds(j['latency']),
     );
   }
 
@@ -309,10 +264,10 @@ class UnknownEvent extends EventBase {
   final Map<String, dynamic> raw;
 
   UnknownEvent(this.raw)
-    : super(
-        event: (raw['event'] ?? raw['type'] ?? 'info').toString(),
-        source: (raw['source'] ?? 'unknown').toString(),
-      );
+      : super(
+          event: (raw['event'] ?? raw['type'] ?? 'info').toString(),
+          source: (raw['source'] ?? 'unknown').toString(),
+        );
 
   @override
   String toString() => 'UnknownEvent(raw=$raw)';

@@ -27,7 +27,7 @@ class ClovaPanel extends StatelessWidget {
             Text(
               header,
               style: GoogleFonts.gowunDodum(
-                color: Colors.white.withOpacity(0.9),
+                color: Colors.white.withValues(alpha: 0.9),
                 fontWeight: FontWeight.w700,
                 fontSize: 40,
                 shadows: const [

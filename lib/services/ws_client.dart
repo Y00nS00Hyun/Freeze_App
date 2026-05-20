@@ -15,6 +15,8 @@ typedef StateHandler = void Function(String state);
 class WsClient {
   WsClient(this.endpoint, {this.onEvent, this.onState});
 
+  static const Duration _reconnectDelay = Duration(seconds: 3);
+
   final String endpoint;
   final EventHandler? onEvent;
   final StateHandler? onState;
@@ -22,29 +24,25 @@ class WsClient {
   WebSocketChannel? _ch;
   StreamSubscription? _sub;
   Timer? _retry;
+  bool _disposed = false;
 
   void connect() {
+    if (_disposed) return;
     onState?.call('connecting');
     try {
-      final uri = Uri.parse(endpoint);
-      debugPrint('[WS] connect → $uri');
-
-      _ch = platformConnectWs(uri);
-
+      _ch = platformConnectWs(Uri.parse(endpoint));
       _sub = _ch!.stream.listen(
         _onMessage,
         onDone: () {
-          debugPrint('[WS] onDone');
           onState?.call('disconnected');
           _scheduleReconnect();
         },
         onError: (e, st) {
-          debugPrint('[WS] onError $e\n$st');
+          debugPrint('[WS] onError $e');
           onState?.call('error');
           _scheduleReconnect();
         },
       );
-
       onState?.call('connected');
     } catch (e) {
       debugPrint('[WS] connect error: $e');
@@ -54,34 +52,23 @@ class WsClient {
   }
 
   void _onMessage(dynamic data) {
-    onState?.call('receiving');
     try {
       final text = (data is List<int>) ? utf8.decode(data) : data.toString();
-      debugPrint('[WS][RAW] $text');
-
       final obj = json.decode(text);
 
       if (obj is Map<String, dynamic>) {
-        final evt = EventBase.fromJson(obj);
-        debugPrint(
-          '[WS][ROUTED] ${evt.runtimeType} src=${evt.source} ev=${evt.event}',
-        );
-        onEvent?.call(evt);
+        onEvent?.call(EventBase.fromJson(obj));
       } else if (obj is List) {
         for (final it in obj) {
           if (it is Map<String, dynamic>) {
-            final evt = EventBase.fromJson(it);
-            debugPrint(
-              '[WS][ROUTED.list] ${evt.runtimeType} src=${evt.source} ev=${evt.event}',
-            );
-            onEvent?.call(evt);
+            onEvent?.call(EventBase.fromJson(it));
           }
         }
       } else {
         onEvent?.call(UnknownEvent({'raw': obj}));
       }
     } catch (e, st) {
-      debugPrint('[WS][onMessage][ERROR] $e\n$st\n[data]=$data');
+      debugPrint('[WS][onMessage][ERROR] $e\n$st');
     }
   }
 
@@ -90,25 +77,26 @@ class WsClient {
   void sendString(String s) {
     try {
       _ch?.sink.add(s);
-      debugPrint('[WS] → $s');
     } catch (e) {
       debugPrint('[WS] send error: $e');
     }
   }
 
   void _scheduleReconnect() {
+    if (_disposed) return;
     _retry?.cancel();
     onState?.call('reconnecting');
-    _retry = Timer(const Duration(seconds: 3), connect);
+    _retry = Timer(_reconnectDelay, connect);
   }
 
   Future<void> dispose() async {
+    _disposed = true;
+    _retry?.cancel();
     try {
       await _sub?.cancel();
     } catch (_) {}
     try {
       await _ch?.sink.close(ws_status.normalClosure);
     } catch (_) {}
-    _retry?.cancel();
   }
 }

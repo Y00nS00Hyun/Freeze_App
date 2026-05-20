@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/events.dart';
 import '../services/ws_client.dart';
+import '../services/notification_service.dart';
 import '../widgets/yamnet_card.dart';
 import '../widgets/clova_panel.dart';
-import '../services/notification_service.dart';
-import '../pages/yolo_page.dart';
+import 'yolo_page.dart';
 
 class EventViewerPage extends StatefulWidget {
   const EventViewerPage({super.key, required this.endpoint});
@@ -18,6 +18,18 @@ class EventViewerPage extends StatefulWidget {
 }
 
 class _EventViewerPageState extends State<EventViewerPage> {
+  static const double _minConfidence = 0.30;
+  static const Duration _dangerHold = Duration(seconds: 7);
+  static const Duration _yamNotiCooldown = Duration(seconds: 3);
+  static const Duration _clovaNotiCooldown = Duration(seconds: 2);
+  static const int _maxYoloHistory = 100;
+
+  // 비위험으로 간주할 라벨 키워드 (음성류 / safe)
+  static const Set<String> _nonDangerKeywords = {
+    'speech', 'talking', 'conversation', 'narration', 'monologue',
+    'debate', 'dialogue', 'chant', 'narrator', 'singing', 'silence', 'safe',
+  };
+
   late final WsClient _ws;
 
   YamnetEvent? _yam;
@@ -25,25 +37,17 @@ class _EventViewerPageState extends State<EventViewerPage> {
   ClovaEvent? _clova;
   final List<YoloEvent> _yolos = [];
   final Set<String> _yoloKeys = {};
-  String _conn = '연결 준비...';
 
   Timer? _yamHideTimer;
+  DateTime? _dangerHoldUntil;
 
   // YAMNet 위험 알림 쿨다운
-  String? _lastNotiKey;
-  DateTime _lastNotiAt = DateTime.fromMillisecondsSinceEpoch(0);
-  static const Duration _notiCooldown = Duration(seconds: 3);
+  String? _lastYamNotiKey;
+  DateTime _lastYamNotiAt = DateTime.fromMillisecondsSinceEpoch(0);
 
-  // YAMNet 위험 유지
-  DateTime? _dangerHoldUntil;
-  static const Duration _dangerHold = Duration(seconds: 7);
-
-  // Clova(음성 인식) 알림 쿨다운
+  // Clova 알림 쿨다운
   String? _lastClovaText;
   DateTime _lastClovaNotiAt = DateTime.fromMillisecondsSinceEpoch(0);
-  static const Duration _clovaNotiCooldown = Duration(seconds: 2);
-
-  static const double _minConfidence = 0.30;
 
   bool get _isHolding =>
       _dangerHoldUntil != null && DateTime.now().isBefore(_dangerHoldUntil!);
@@ -53,67 +57,8 @@ class _EventViewerPageState extends State<EventViewerPage> {
     super.initState();
     _ws = WsClient(
       widget.endpoint,
-      onEvent: (evt) {
-        if (!mounted) return;
-
-        // evt를 Map으로 변환(Whisper->Clova 브리지 처리용)
-        Map<String, dynamic>? m;
-        try {
-          m = (evt as dynamic).toJson();
-        } catch (_) {
-          // 무시
-        }
-
-        // Whisper transcript를 ClovaEvent로 변환
-        if (m != null &&
-            m['source'] == 'whisper' &&
-            m['event'] == 'transcript') {
-          final txt = (m['transcript'] ?? '').toString();
-          debugPrint('[UI] Whisper->Clova text="$txt"');
-
-          setState(
-            () => _clova = ClovaEvent(
-              event: 'transcript',
-              source: 'clova',
-              text: txt,
-            ),
-          );
-
-          // 🔔 Clova 알림
-          _maybeNotifyClova(txt);
-          return;
-        }
-
-        // 기존 분기
-        if (evt is YamnetEvent) {
-          _onYamnet(evt);
-          return;
-        }
-
-        if (evt is ClovaEvent) {
-          debugPrint('[UI] ClovaEvent text="${evt.text}"');
-          setState(() => _clova = evt);
-
-          // 🔔 Clova 알림
-          _maybeNotifyClova(evt.text ?? '');
-          return;
-        }
-
-        if (evt is YoloEvent) {
-          _onYolo(evt);
-          return;
-        }
-      },
-      onState: (s) async {
-        if (!mounted) return;
-        setState(() => _conn = s);
-        if (s == 'connected') {
-          await Future.delayed(const Duration(milliseconds: 150));
-          if (!mounted) return;
-          _ws.sendJson({'action': 'subscribe', 'topic': 'public'});
-          _ws.sendJson({'action': 'subscribe', 'topic': 'app'});
-        }
-      },
+      onEvent: _onEvent,
+      onState: _onState,
     )..connect();
   }
 
@@ -124,31 +69,34 @@ class _EventViewerPageState extends State<EventViewerPage> {
     super.dispose();
   }
 
-  // Clova(음성 인식) 알림 로직
-  void _maybeNotifyClova(String raw) {
-    final text = raw.trim();
-    if (text.isEmpty) return;
+  void _onEvent(EventBase evt) {
+    if (!mounted) return;
 
-    // ✅ 점만 있는 텍스트는 알림 제외 (예: ".", "..", "...")
-    if (RegExp(r'^\.+$').hasMatch(text)) return;
-
-    final now = DateTime.now();
-    final keyChanged = _lastClovaText != text;
-    final timeOk = now.difference(_lastClovaNotiAt) >= _clovaNotiCooldown;
-
-    if (keyChanged || timeOk) {
-      _lastClovaText = text;
-      _lastClovaNotiAt = now;
-      NotiService.I.showNow(title: '🗣️ 음성 인식', body: text);
+    if (evt is YamnetEvent) {
+      _onYamnet(evt);
+    } else if (evt is ClovaEvent) {
+      setState(() => _clova = evt);
+      _maybeNotifyClova(evt.text);
+    } else if (evt is YoloEvent) {
+      _onYolo(evt);
     }
   }
 
-  // YAMNet 처리
+  Future<void> _onState(String s) async {
+    if (!mounted) return;
+    if (s == 'connected') {
+      await Future.delayed(const Duration(milliseconds: 150));
+      if (!mounted) return;
+      _ws.sendJson({'action': 'subscribe', 'topic': 'public'});
+      _ws.sendJson({'action': 'subscribe', 'topic': 'app'});
+    }
+  }
+
+  // ── YAMNet ────────────────────────────────────────────────────────
   void _onYamnet(YamnetEvent e) {
     final label = e.label.trim().isEmpty ? 'Unknown' : e.label.trim();
-    final conf = e.confidence;
     final isDanger =
-        (e.danger ?? !_isNonDanger(label)) && conf >= _minConfidence;
+        (e.danger ?? !_isNonDanger(label)) && e.confidence >= _minConfidence;
 
     if (_isHolding && !isDanger) return;
 
@@ -156,7 +104,7 @@ class _EventViewerPageState extends State<EventViewerPage> {
       event: e.event,
       source: e.source,
       label: label,
-      confidence: conf,
+      confidence: e.confidence,
       direction: e.direction,
       energy: e.energy,
       ms: e.ms,
@@ -173,85 +121,90 @@ class _EventViewerPageState extends State<EventViewerPage> {
       _yamHideTimer?.cancel();
       _yamHideTimer = Timer(_dangerHold, () {
         if (!mounted) return;
-        _dangerHoldUntil = null;
+        setState(() => _dangerHoldUntil = null);
       });
 
-      // 위험 알림(쿨다운)
-      final key = '${e.ms ?? 0}:${label.toLowerCase()}';
-      final now = DateTime.now();
-      if (!(_lastNotiKey == key &&
-          now.difference(_lastNotiAt) < _notiCooldown)) {
-        _lastNotiKey = key;
-        _lastNotiAt = now;
-        final percent = (conf * 100).toStringAsFixed(0);
-        NotiService.I.showNow(
-          title: '⚠️ 비상 상황 감지',
-          body: '$label · 신뢰도 $percent%',
-        );
-      }
+      _notifyYamnetDanger(label, e.confidence, e.ms);
     }
     setState(() {});
   }
 
-  bool _isNonDanger(String label) {
-    final s = label.toLowerCase();
-    final isSpeechLike =
-        s.contains('speech') ||
-        s.contains('talking') ||
-        s.contains('conversation') ||
-        s.contains('narration') ||
-        s.contains('monologue') ||
-        s.contains('debate') ||
-        s.contains('dialogue') ||
-        s.contains('chant') ||
-        s.contains('narrator') ||
-        s.contains('singing') ||
-        s.contains('silence');
-    final isSafe = s.contains('safe');
-    return isSpeechLike || isSafe;
+  void _notifyYamnetDanger(String label, double conf, int? ms) {
+    final key = '${ms ?? 0}:${label.toLowerCase()}';
+    final now = DateTime.now();
+    final isCoolingDown = _lastYamNotiKey == key &&
+        now.difference(_lastYamNotiAt) < _yamNotiCooldown;
+    if (isCoolingDown) return;
+
+    _lastYamNotiKey = key;
+    _lastYamNotiAt = now;
+    NotiService.I.showNow(
+      title: '⚠️ 비상 상황 감지',
+      body: '$label · 신뢰도 ${(conf * 100).toStringAsFixed(0)}%',
+    );
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // YOLO 처리 (알림 없음)
+  static bool _isNonDanger(String label) {
+    final s = label.toLowerCase();
+    return _nonDangerKeywords.any(s.contains);
+  }
+
+  // ── Clova ─────────────────────────────────────────────────────────
+  void _maybeNotifyClova(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) return;
+    // 점만 있는 텍스트는 알림 제외 (예: ".", "..", "...")
+    if (RegExp(r'^\.+$').hasMatch(text)) return;
+
+    final now = DateTime.now();
+    final keyChanged = _lastClovaText != text;
+    final timeOk = now.difference(_lastClovaNotiAt) >= _clovaNotiCooldown;
+    if (!keyChanged && !timeOk) return;
+
+    _lastClovaText = text;
+    _lastClovaNotiAt = now;
+    NotiService.I.showNow(title: '🗣️ 음성 인식', body: text);
+  }
+
+  // ── YOLO ──────────────────────────────────────────────────────────
   void _onYolo(YoloEvent e) {
-    final ty = e.event.toLowerCase();
-    if (ty == 'yolo_recording_done') return;
+    if (e.event.toLowerCase() == 'yolo_recording_done') return;
 
-    final key = (e.file?.trim().isNotEmpty == true)
-        ? e.file!.trim()
-        : '${e.time ?? 0}:${e.label}'.toLowerCase();
-
+    final key = _yoloKeyOf(e);
     if (_yoloKeys.contains(key)) return;
     _yoloKeys.add(key);
 
     _yolos.insert(0, e);
-    if (_yolos.length > 100) {
+    if (_yolos.length > _maxYoloHistory) {
       final removed = _yolos.removeLast();
-      final rk = (removed.file?.trim().isNotEmpty == true)
-          ? removed.file!.trim()
-          : '${removed.time ?? 0}:${removed.label}'.toLowerCase();
-      _yoloKeys.remove(rk);
+      _yoloKeys.remove(_yoloKeyOf(removed));
     }
     setState(() {});
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
+  String _yoloKeyOf(YoloEvent e) {
+    final f = e.file?.trim();
+    if (f != null && f.isNotEmpty) return f;
+    return '${e.time ?? 0}:${e.label}'.toLowerCase();
+  }
 
-  String? _guessBaseUrlFromEndpoint(String wsEndpoint) {
+  // ── Navigation ────────────────────────────────────────────────────
+  String? _httpBaseFromWs(String wsEndpoint) {
     final u = Uri.tryParse(wsEndpoint);
     if (u == null) return null;
-    final scheme = (u.scheme == 'wss') ? 'https' : 'http';
-    final host = u.host;
+    final scheme = u.scheme == 'wss' ? 'https' : 'http';
     final port = u.hasPort ? ':${u.port}' : '';
-    return '$scheme://$host$port';
+    return '$scheme://${u.host}$port';
   }
 
   void _openYoloPage() {
-    final base = _guessBaseUrlFromEndpoint(widget.endpoint);
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => YoloPage(items: _yolos, imageBaseUrl: base),
+        builder: (_) => YoloPage(
+          items: _yolos,
+          imageBaseUrl: _httpBaseFromWs(widget.endpoint),
+        ),
       ),
     );
   }
@@ -299,7 +252,7 @@ class _EventViewerPageState extends State<EventViewerPage> {
               height: yamHeight,
               child: Center(
                 child: AnimatedOpacity(
-                  opacity: (displayed != null) ? 1.0 : 0.0,
+                  opacity: displayed != null ? 1.0 : 0.0,
                   duration: const Duration(milliseconds: 180),
                   child: SingleChildScrollView(
                     physics: const BouncingScrollPhysics(),

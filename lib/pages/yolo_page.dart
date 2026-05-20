@@ -1,7 +1,9 @@
+// lib/pages/yolo_page.dart
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:google_fonts/google_fonts.dart';
 import '../models/events.dart';
+import '../utils/yolo_utils.dart';
+import '../widgets/empty_state.dart';
 import '../widgets/yolo_card.dart';
 
 class YoloPage extends StatefulWidget {
@@ -16,6 +18,23 @@ class YoloPage extends StatefulWidget {
 
   @override
   State<YoloPage> createState() => _YoloPageState();
+}
+
+// 섹션 헤더 또는 카드 항목으로 펼친 리스트 엔트리
+sealed class _Row {
+  const _Row();
+}
+
+class _HeaderRow extends _Row {
+  const _HeaderRow(this.title);
+  final String title;
+}
+
+class _CardRow extends _Row {
+  const _CardRow({required this.imageUrl, required this.linkUrl, required this.fileName});
+  final String imageUrl;
+  final String? linkUrl;
+  final String? fileName;
 }
 
 class _YoloPageState extends State<YoloPage> {
@@ -61,71 +80,42 @@ class _YoloPageState extends State<YoloPage> {
     final file = (y.file ?? '').trim();
     final lower = file.toLowerCase();
 
-    if (lower.endsWith('.jpg') ||
-        lower.endsWith('.jpeg') ||
-        lower.endsWith('.png')) {
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png')) {
       return file;
     }
-
     if (lower.endsWith('.mp4')) {
       return file.replaceFirst(RegExp(r'\.mp4$', caseSensitive: false), '.jpg');
     }
 
-    final name = _fileNameFromEpoch(y.time);
-    if (name != null && widget.imageBaseUrl != null) {
-      final base = widget.imageBaseUrl!.replaceAll(RegExp(r'/+$'), '');
-      return '$base/$name';
+    final name = fileNameFromEpoch(y.time);
+    final base = widget.imageBaseUrl;
+    if (name != null && base != null) {
+      return '${base.replaceAll(RegExp(r'/+$'), '')}/$name';
     }
     return null;
-  }
-
-  String? _fileNameFromEpoch(int? sec) {
-    if (sec == null) {
-      debugPrint('[YOLO] time is null → fileName 생성 불가');
-      return null;
-    }
-    final dt = DateTime.fromMillisecondsSinceEpoch(
-      sec * 1000,
-      isUtc: true,
-    ).toLocal();
-    String two(int v) => v.toString().padLeft(2, '0');
-    return '${dt.year}_${two(dt.month)}_${two(dt.day)}_${two(dt.hour)}${two(dt.minute)}${two(dt.second)}.jpg';
-  }
-
-  String _dateKeyFromEpoch(int? epochSec) {
-    if (epochSec == null) return 'unknown';
-    final dt = DateTime.fromMillisecondsSinceEpoch(
-      epochSec * 1000,
-      isUtc: true,
-    ).toLocal();
-    String two(int v) => v.toString().padLeft(2, '0');
-    return '${dt.year}-${two(dt.month)}-${two(dt.day)}';
   }
 
   bool _isSameCalendarDate(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
-  Future<void> _pickDate(BuildContext context, List<YoloEvent> pool) async {
-    final times = pool.map((e) => e.time ?? 0).where((t) => t > 0).toList();
-    times.sort();
+  Future<void> _pickDate(List<YoloEvent> pool) async {
+    final times = pool
+        .map((e) => e.time ?? 0)
+        .where((t) => t > 0)
+        .toList()
+      ..sort();
+
     final now = DateTime.now();
     final first = times.isEmpty
         ? now.subtract(const Duration(days: 365))
-        : DateTime.fromMillisecondsSinceEpoch(
-            times.first * 1000,
-            isUtc: true,
-          ).toLocal();
+        : DateTime.fromMillisecondsSinceEpoch(times.first * 1000, isUtc: true).toLocal();
     final last = times.isEmpty
         ? now
-        : DateTime.fromMillisecondsSinceEpoch(
-            times.last * 1000,
-            isUtc: true,
-          ).toLocal();
+        : DateTime.fromMillisecondsSinceEpoch(times.last * 1000, isUtc: true).toLocal();
 
-    final initial = _selectedDate ?? last;
     final picked = await showDatePicker(
       context: context,
-      initialDate: initial,
+      initialDate: _selectedDate ?? last,
       firstDate: DateTime(first.year, first.month, first.day),
       lastDate: DateTime(last.year, last.month, last.day),
       helpText: '날짜 선택',
@@ -137,18 +127,15 @@ class _YoloPageState extends State<YoloPage> {
     if (picked != null) setState(() => _selectedDate = picked);
   }
 
-  @override
-  Widget build(BuildContext context) {
-    // 1) 유효 항목만 필터
-    final visibleItems = <YoloEvent>[];
+  // 표시 가능한 이벤트만 추려서, 날짜 섹션을 끼운 평탄화된 행 리스트로 반환
+  List<_Row> _buildRows() {
+    final visible = <(YoloEvent, String, String?)>[];
     for (final y in widget.items) {
       final rawLabel = y.label.trim();
       if (rawLabel.isEmpty || rawLabel.toLowerCase() == 'null') continue;
 
-      final raw = _pickDisplayImage(y);
-      final url = _normalizeUrl(raw);
-      final ok = url != null && (Uri.tryParse(url)?.hasScheme ?? false);
-      if (!ok) continue;
+      final imageUrl = _normalizeUrl(_pickDisplayImage(y));
+      if (imageUrl == null || !(Uri.tryParse(imageUrl)?.hasScheme ?? false)) continue;
 
       if (_selectedDate != null && y.time != null) {
         final dt = DateTime.fromMillisecondsSinceEpoch(
@@ -157,21 +144,33 @@ class _YoloPageState extends State<YoloPage> {
         ).toLocal();
         if (!_isSameCalendarDate(dt, _selectedDate!)) continue;
       }
-      visibleItems.add(y);
+
+      final linkRaw = (y.file?.trim().isNotEmpty == true) ? y.file!.trim() : imageUrl;
+      visible.add((y, imageUrl, _normalizeUrl(linkRaw)));
     }
 
-    // 2) 시간 내림차순 정렬
-    visibleItems.sort((a, b) => (b.time ?? 0).compareTo(a.time ?? 0));
+    // 시간 내림차순
+    visible.sort((a, b) => (b.$1.time ?? 0).compareTo(a.$1.time ?? 0));
 
-    // 3) 날짜별 그룹핑
-    final Map<String, List<YoloEvent>> grouped = {};
-    for (final y in visibleItems) {
-      final key = _dateKeyFromEpoch(y.time);
-      grouped.putIfAbsent(key, () => []).add(y);
+    final rows = <_Row>[];
+    String? currentKey;
+    for (final (y, imageUrl, linkUrl) in visible) {
+      final key = dateKeyFromEpoch(y.time);
+      if (key != currentKey) {
+        rows.add(_HeaderRow(key));
+        currentKey = key;
+      }
+      rows.add(_CardRow(
+        imageUrl: imageUrl,
+        linkUrl: linkUrl,
+        fileName: fileNameFromEpoch(y.time),
+      ));
     }
-    final sectionKeys = grouped.keys.toList()..sort((a, b) => b.compareTo(a));
+    return rows;
+  }
 
-    final appBar = AppBar(
+  AppBar _buildAppBar() {
+    return AppBar(
       elevation: 0,
       backgroundColor: const Color(0xFFF9FBFD),
       centerTitle: true,
@@ -185,17 +184,17 @@ class _YoloPageState extends State<YoloPage> {
         ),
       ),
       iconTheme: const IconThemeData(color: Color(0xFF78B8C4)),
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(1.3),
-        child: Container(
-          color: const Color.fromARGB(255, 151, 198, 206),
-          height: 1.3,
+      bottom: const PreferredSize(
+        preferredSize: Size.fromHeight(1.3),
+        child: ColoredBox(
+          color: Color.fromARGB(255, 151, 198, 206),
+          child: SizedBox(height: 1.3, width: double.infinity),
         ),
       ),
       actions: [
         IconButton(
           tooltip: '날짜 선택',
-          onPressed: () => _pickDate(context, widget.items),
+          onPressed: () => _pickDate(widget.items),
           icon: const Icon(Icons.calendar_today_outlined, color: Colors.grey),
         ),
         if (_selectedDate != null)
@@ -206,81 +205,40 @@ class _YoloPageState extends State<YoloPage> {
           ),
       ],
     );
+  }
 
-    if (visibleItems.isEmpty) {
+  @override
+  Widget build(BuildContext context) {
+    final rows = _buildRows();
+
+    if (rows.isEmpty) {
       return Scaffold(
         backgroundColor: const Color(0xFFF9FBFD),
-        appBar: appBar,
-        body: const _EmptyState(),
+        appBar: _buildAppBar(),
+        body: const EmptyState(message: '현재 등록된 사진이 없습니다'),
       );
     }
 
-    final selectedDateChip = (_selectedDate != null)
-        ? Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Chip(
-                label: Text(
-                  '${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')} 선택됨',
-                ),
-                deleteIcon: const Icon(Icons.close),
-                onDeleted: () => setState(() => _selectedDate = null),
-                backgroundColor: const Color(0xFFE8F4F7),
-                side: const BorderSide(color: Color(0xFFB7D7DE)),
-              ),
-            ),
-          )
-        : const SizedBox.shrink();
-
     return Scaffold(
       backgroundColor: const Color(0xFFF9FBFD),
-      appBar: appBar,
+      appBar: _buildAppBar(),
       body: Column(
         children: [
-          selectedDateChip,
+          if (_selectedDate != null) _SelectedDateChip(
+            date: _selectedDate!,
+            onClear: () => setState(() => _selectedDate = null),
+          ),
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.all(16),
-              itemCount: sectionKeys.fold<int>(
-                0,
-                (sum, k) => sum + 1 + grouped[k]!.length,
-              ),
-              itemBuilder: (context, index) {
-                int cursor = 0;
-                for (final key in sectionKeys) {
-                  if (index == cursor) {
-                    return _SectionHeader(title: key);
-                  }
-                  cursor++;
-
-                  final list = grouped[key]!;
-                  final localIndex = index - cursor;
-                  if (localIndex >= 0 && localIndex < list.length) {
-                    final y = list[localIndex];
-
-                    final rawDisplayImageUrl = _pickDisplayImage(y);
-                    final rawLinkUrl = (y.file?.trim().isNotEmpty == true)
-                        ? y.file!.trim()
-                        : rawDisplayImageUrl;
-
-                    final imageUrl = _normalizeUrl(rawDisplayImageUrl)!;
-                    final linkUrl = _normalizeUrl(rawLinkUrl);
-
-                    debugPrint(
-                      '[YOLO] $key label=${y.label} time=${y.time} '
-                      'file=${y.file} thumb=${y.thumbnail} → display=$imageUrl | link=$linkUrl',
-                    );
-
-                    return YoloCard(
-                      imageUrl: imageUrl,
-                      linkUrl: linkUrl, // 버튼/탭 타깃
-                      fileName: _fileNameFromEpoch(y.time),
-                    );
-                  }
-                  cursor += list.length;
-                }
-                return const SizedBox.shrink();
+              itemCount: rows.length,
+              itemBuilder: (context, i) {
+                final row = rows[i];
+                return switch (row) {
+                  _HeaderRow(:final title) => _SectionHeader(title: title),
+                  _CardRow(:final imageUrl, :final linkUrl, :final fileName) =>
+                    YoloCard(imageUrl: imageUrl, linkUrl: linkUrl, fileName: fileName),
+                };
               },
             ),
           ),
@@ -293,12 +251,13 @@ class _YoloPageState extends State<YoloPage> {
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader({required this.title});
   final String title;
+
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(top: 8, bottom: 6),
       child: Text(
-        title, // 날짜
+        title,
         style: GoogleFonts.gowunDodum(
           fontSize: 19,
           fontWeight: FontWeight.w600,
@@ -310,18 +269,25 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
+class _SelectedDateChip extends StatelessWidget {
+  const _SelectedDateChip({required this.date, required this.onClear});
+  final DateTime date;
+  final VoidCallback onClear;
+
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.photo_camera_back_outlined, size: 56, color: Colors.grey),
-          SizedBox(height: 10),
-          Text('현재 등록된 사진이 없습니다', style: TextStyle(color: Colors.grey)),
-        ],
+    String two(int v) => v.toString().padLeft(2, '0');
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Chip(
+          label: Text('${date.year}-${two(date.month)}-${two(date.day)} 선택됨'),
+          deleteIcon: const Icon(Icons.close),
+          onDeleted: onClear,
+          backgroundColor: const Color(0xFFE8F4F7),
+          side: const BorderSide(color: Color(0xFFB7D7DE)),
+        ),
       ),
     );
   }

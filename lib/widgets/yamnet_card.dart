@@ -1,67 +1,57 @@
 // lib/widgets/yamnet_card.dart
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/events.dart';
-import '../services/notification_service.dart'; // ✅ 알림 서비스 import
 
-/// YAMNet 이벤트 표시 카드 (7초 유지 + 위험 시 푸시 알림)
+/// YAMNet 이벤트 표시 카드 (위험 라벨은 7초간 유지)
 class YamnetCard extends StatefulWidget {
   const YamnetCard({super.key, this.event});
   final YamnetEvent? event;
 
-  // 라벨/신뢰도 정규화
-  static (String, double) _normalizeLabelAndConf(
-    String rawLabel,
-    double rawConf,
-  ) {
-    String label = rawLabel;
-    double conf = rawConf;
+  static const Duration _delayHold = Duration(seconds: 7);
 
+  // 일부 서버 응답이 '{label: x, conf: y}' 형태의 문자열 라벨을 보내는 경우 대비
+  static (String, double) _normalizeLabelAndConf(String rawLabel, double rawConf) {
     final s = rawLabel.trim();
-    if (s.startsWith('{') && s.contains('label')) {
-      final body = s.substring(1, s.endsWith('}') ? s.length - 1 : s.length);
-      for (final part in body.split(',')) {
-        final kv = part.split(':');
-        if (kv.length >= 2) {
-          final key = kv[0].trim().toLowerCase();
-          final val = kv.sublist(1).join(':').trim();
-          if (key == 'label') label = val;
-          if (key == 'conf' || key == 'confidence') {
-            final parsed = double.tryParse(
-              val.replaceAll(RegExp('[^0-9eE+\\-.]'), ''),
-            );
-            if (parsed != null) conf = parsed;
-          }
+    if (s.startsWith('{')) {
+      try {
+        final decoded = jsonDecode(s);
+        if (decoded is Map) {
+          final label = (decoded['label'] ?? rawLabel).toString();
+          final conf = (decoded['conf'] ?? decoded['confidence']) as num?;
+          return (_stripQuotes(label), conf?.toDouble() ?? rawConf);
         }
+      } catch (_) {
+        // 무시: 일반 문자열로 처리
       }
     }
-
-    // 따옴표/공백 제거
-    label = label.trim();
-    if ((label.startsWith('"') && label.endsWith('"')) ||
-        (label.startsWith("'") && label.endsWith("'"))) {
-      label = label.substring(1, label.length - 1).trim();
-    }
-    return (label, conf);
+    return (_stripQuotes(s), rawConf);
   }
 
-  // 화면표시용 한국어 라벨
+  static String _stripQuotes(String v) {
+    final s = v.trim();
+    if (s.length >= 2 &&
+        ((s.startsWith('"') && s.endsWith('"')) ||
+            (s.startsWith("'") && s.endsWith("'")))) {
+      return s.substring(1, s.length - 1).trim();
+    }
+    return s;
+  }
+
   static String _labelKo(String label) {
     final s = label.trim().toLowerCase();
     if (s == 'safe') return '안전';
-    if (s == '사이렌') return '사이렌';
-    if (s == '경적소리' || s == 'horn' || s == 'car horn') return '경적소리';
+    if (s == 'horn' || s == 'car horn') return '경적소리';
     return label.isEmpty ? '대기 중' : label;
   }
 
-  // 비위험 판정
   static bool _isNonDanger(String label) {
     final s = label.trim().toLowerCase();
     return s == 'safe' || s == '안전';
   }
 
-  // 7초 유지 대상
   static bool _shouldDelay(String label) {
     final s = label.trim().toLowerCase();
     return s == '사이렌' || s == '경적소리' || s == 'horn' || s == 'car horn';
@@ -76,10 +66,6 @@ class _YamnetCardState extends State<YamnetCard>
   DateTime? _dangerUntil;
   Timer? _tick;
   String? _lastDangerKo;
-
-  // 🔔 알림 중복 방지
-  DateTime? _lastNotifyAt;
-  String? _lastNotifyLabel;
 
   @override
   bool get wantKeepAlive => true;
@@ -111,30 +97,18 @@ class _YamnetCardState extends State<YamnetCard>
       return;
     }
 
-    final normalized = YamnetCard._normalizeLabelAndConf(e.label, e.confidence);
-    final label = normalized.$1;
+    final (label, _) = YamnetCard._normalizeLabelAndConf(e.label, e.confidence);
+    final isDanger = e.danger ?? !YamnetCard._isNonDanger(label);
 
-    final isNonDangerLocal = YamnetCard._isNonDanger(label);
-    final isDangerLocal = e.danger ?? !isNonDangerLocal;
-    if (isDangerLocal) {
+    if (isDanger) {
       _lastDangerKo = YamnetCard._labelKo(label);
     }
 
-    // 7초 유지 로직
     if (YamnetCard._shouldDelay(label)) {
       final now = DateTime.now();
       if (_dangerUntil == null || now.isAfter(_dangerUntil!)) {
-        _dangerUntil = now.add(const Duration(seconds: 7));
+        _dangerUntil = now.add(YamnetCard._delayHold);
       }
-    }
-
-    // ✅ 위험이면 푸시 알림 (중복 방지 포함)
-    if (isDangerLocal) {
-      final ko = YamnetCard._labelKo(label);
-      _notifyDangerOnce(
-        labelKo: ko,
-        payload: 'label=$ko;conf=${normalized.$2}',
-      );
     }
 
     _startOrStopTicker();
@@ -143,13 +117,11 @@ class _YamnetCardState extends State<YamnetCard>
 
   bool get _isDelayActive {
     final until = _dangerUntil;
-    if (until == null) return false;
-    return DateTime.now().isBefore(until);
+    return until != null && DateTime.now().isBefore(until);
   }
 
   void _startOrStopTicker() {
-    final active = _isDelayActive;
-    if (active && _tick == null) {
+    if (_isDelayActive && _tick == null) {
       _tick = Timer.periodic(const Duration(milliseconds: 250), (_) {
         if (!mounted) return;
         if (!_isDelayActive) {
@@ -158,32 +130,9 @@ class _YamnetCardState extends State<YamnetCard>
         }
         setState(() {});
       });
-    } else if (!active && _tick != null) {
+    } else if (!_isDelayActive && _tick != null) {
       _tick?.cancel();
       _tick = null;
-    }
-  }
-
-  // 🔔 푸시 알림 중복 방지 로직
-  Future<void> _notifyDangerOnce({
-    required String labelKo,
-    String? payload,
-  }) async {
-    const minGap = Duration(seconds: 10); // 최소 간격
-    final now = DateTime.now();
-
-    final labelChanged = _lastNotifyLabel != labelKo;
-    final timeOk =
-        _lastNotifyAt == null || now.difference(_lastNotifyAt!) >= minGap;
-
-    if (labelChanged || timeOk) {
-      await NotiService.I.showNow(
-        title: '위험 감지',
-        body: '$labelKo 소리가 감지되었습니다',
-        payload: payload ?? labelKo,
-      );
-      _lastNotifyAt = now;
-      _lastNotifyLabel = labelKo;
     }
   }
 
@@ -214,34 +163,28 @@ class _YamnetCardState extends State<YamnetCard>
   Widget build(BuildContext context) {
     super.build(context);
 
-    if (widget.event == null) return const SizedBox.shrink();
-    final e = widget.event!;
+    final e = widget.event;
+    if (e == null) return const SizedBox.shrink();
 
-    final normalized = YamnetCard._normalizeLabelAndConf(e.label, e.confidence);
-    final label = normalized.$1;
-    final conf = normalized.$2;
-    final safeConf = conf.isFinite ? conf.clamp(0.0, 1.0) : 0.0;
+    final (label, _) = YamnetCard._normalizeLabelAndConf(e.label, e.confidence);
 
-    final double? rawDirDeg = _parseDirection(e.direction);
-    final double? dirDeg = (rawDirDeg == null || !rawDirDeg.isFinite)
+    final rawDirDeg = _parseDirection(e.direction);
+    final dirDeg = (rawDirDeg == null || !rawDirDeg.isFinite)
         ? null
         : ((rawDirDeg % 360) + 360) % 360;
 
-    final energy = e.energy;
     final ko = YamnetCard._labelKo(label);
     final isNonDanger = YamnetCard._isNonDanger(label);
     final isDanger = e.danger ?? !isNonDanger;
     final effectiveIsDanger = _isDelayActive ? true : isDanger;
 
-    final String titleText = effectiveIsDanger
+    final titleText = effectiveIsDanger
         ? (_isDelayActive && isNonDanger ? (_lastDangerKo ?? ko) : ko)
         : '안전';
+    final titleColor =
+        effectiveIsDanger ? Colors.redAccent : const Color(0xFF3BB273);
 
-    final titleColor = effectiveIsDanger
-        ? Colors.redAccent
-        : const Color(0xFF3BB273);
-
-    final Widget mainSymbol = effectiveIsDanger
+    final mainSymbol = effectiveIsDanger
         ? const Icon(
             Icons.warning_amber_rounded,
             color: Color.fromARGB(255, 255, 4, 0),
@@ -251,60 +194,55 @@ class _YamnetCardState extends State<YamnetCard>
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 320),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  mainSymbol,
-                  const SizedBox(height: 12),
-                  Text(
-                    titleText,
-                    style: const TextStyle(
-                      fontSize: 48,
-                      fontWeight: FontWeight.w800,
-                    ).copyWith(color: titleColor),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 30),
-                  if (dirDeg != null) ...[
-                    const Text(
-                      '방향 정보',
-                      style: TextStyle(fontSize: 30, color: Colors.black87),
-                    ),
-                    const SizedBox(height: 25),
-                    Transform(
-                      alignment: Alignment.center,
-                      transform: Matrix4.identity()
-                        ..rotateZ(-(dirDeg + 90) * math.pi / 180.0),
-                      child: Container(
-                        width: 120,
-                        height: 120,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Color(0xFFB3E5EB),
-                        ),
-                        child: const Icon(
-                          Icons.arrow_forward_rounded,
-                          size: 60,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  // 보조 정보(신뢰도/에너지) 원하면 주석 해제
-                  // Chip(...) 등등
-                ],
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 320),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              mainSymbol,
+              const SizedBox(height: 12),
+              Text(
+                titleText,
+                style: TextStyle(
+                  fontSize: 48,
+                  fontWeight: FontWeight.w800,
+                  color: titleColor,
+                ),
+                textAlign: TextAlign.center,
               ),
-            ),
-          );
-        },
+              const SizedBox(height: 30),
+              if (dirDeg != null) ...[
+                const Text(
+                  '방향 정보',
+                  style: TextStyle(fontSize: 30, color: Colors.black87),
+                ),
+                const SizedBox(height: 25),
+                Transform(
+                  alignment: Alignment.center,
+                  transform: Matrix4.identity()
+                    ..rotateZ(-(dirDeg + 90) * math.pi / 180.0),
+                  child: Container(
+                    width: 120,
+                    height: 120,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Color(0xFFB3E5EB),
+                    ),
+                    child: const Icon(
+                      Icons.arrow_forward_rounded,
+                      size: 60,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
