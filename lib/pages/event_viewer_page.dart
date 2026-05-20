@@ -62,7 +62,8 @@ class _EventViewerPageState extends State<EventViewerPage> {
       widget.endpoint,
       onEvent: _onEvent,
       onState: _onState,
-    )..connect();
+    );
+    unawaited(_ws.connect());
   }
 
   @override

@@ -26,12 +26,13 @@ class WsClient {
   Timer? _retry;
   bool _disposed = false;
 
-  void connect() {
+  Future<void> connect() async {
     if (_disposed) return;
     onState?.call('connecting');
     try {
-      _ch = platformConnectWs(Uri.parse(endpoint));
-      _sub = _ch!.stream.listen(
+      final ch = platformConnectWs(Uri.parse(endpoint));
+      _ch = ch;
+      _sub = ch.stream.listen(
         _onMessage,
         onDone: () {
           onState?.call('disconnected');
@@ -43,6 +44,9 @@ class WsClient {
           _scheduleReconnect();
         },
       );
+      // 실제 핸드셰이크 완료까지 대기
+      await ch.ready;
+      if (_disposed) return;
       onState?.call('connected');
     } catch (e) {
       debugPrint('[WS] connect error: $e');
@@ -86,7 +90,7 @@ class WsClient {
     if (_disposed) return;
     _retry?.cancel();
     onState?.call('reconnecting');
-    _retry = Timer(_reconnectDelay, connect);
+    _retry = Timer(_reconnectDelay, () => unawaited(connect()));
   }
 
   Future<void> dispose() async {

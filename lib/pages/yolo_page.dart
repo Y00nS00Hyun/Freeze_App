@@ -292,7 +292,6 @@ class _SelectedDateChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    String two(int v) => v.toString().padLeft(2, '0');
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
       child: Align(
@@ -322,7 +321,7 @@ class _SelectedDateChip extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    '${date.year}.${two(date.month)}.${two(date.day)}',
+                    '${date.year}.${pad2(date.month)}.${pad2(date.day)}',
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
