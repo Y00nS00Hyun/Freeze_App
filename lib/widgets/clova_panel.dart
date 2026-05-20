@@ -1,6 +1,5 @@
 // lib/widgets/clova_panel.dart
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../models/events.dart';
 
 class ClovaPanel extends StatelessWidget {
@@ -9,48 +8,83 @@ class ClovaPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final header = event == null ? '인식 중...' : '인식 결과';
-    final text = event?.text ?? '...';
+    final hasText = event != null && event!.text.trim().isNotEmpty;
+    final header = hasText ? '인식 결과' : '인식 중';
+    final text = hasText ? event!.text : '주변 음성을 분석하는 중입니다';
 
-    return Padding(
-      padding: const EdgeInsets.all(40),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(45),
-        decoration: BoxDecoration(
-          color: const Color.fromARGB(255, 210, 229, 234),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              header,
-              style: GoogleFonts.gowunDodum(
-                color: Colors.white.withValues(alpha: 0.9),
-                fontWeight: FontWeight.w700,
-                fontSize: 40,
-                shadows: const [
-                  Shadow(color: Colors.black26, offset: Offset(0, 1)),
-                ],
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFE5EAF0)),
+      ),
+      padding: const EdgeInsets.all(22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE6F6F8),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.mic_none_rounded,
+                      size: 14,
+                      color: Color(0xFF0E9AAB),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      header,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.3,
+                        color: Color(0xFF0E9AAB),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: SingleChildScrollView(
-                child: Text(
-                  text,
-                  style: GoogleFonts.gowunDodum(
-                    color: const Color(0xFF4A4A4A),
-                    fontSize: 45,
-                    height: 1.4,
-                    fontWeight: FontWeight.w500,
-                  ),
+              const Spacer(),
+              Text(
+                'CLOVA',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.4,
+                  color: Colors.grey.shade400,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Expanded(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Text(
+                text,
+                style: TextStyle(
+                  color: hasText
+                      ? const Color(0xFF0F172A)
+                      : const Color(0xFF94A3B8),
+                  fontSize: 20,
+                  height: 1.55,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

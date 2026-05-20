@@ -41,6 +41,8 @@ class _EventViewerPageState extends State<EventViewerPage> {
   Timer? _yamHideTimer;
   DateTime? _dangerHoldUntil;
 
+  String _wsState = 'connecting';
+
   // YAMNet 위험 알림 쿨다운
   String? _lastYamNotiKey;
   DateTime _lastYamNotiAt = DateTime.fromMillisecondsSinceEpoch(0);
@@ -84,6 +86,7 @@ class _EventViewerPageState extends State<EventViewerPage> {
 
   Future<void> _onState(String s) async {
     if (!mounted) return;
+    setState(() => _wsState = s);
     if (s == 'connected') {
       await Future.delayed(const Duration(milliseconds: 150));
       if (!mounted) return;
@@ -211,59 +214,211 @@ class _EventViewerPageState extends State<EventViewerPage> {
 
   @override
   Widget build(BuildContext context) {
-    final h = MediaQuery.of(context).size.height;
-    final yamHeight = (h * 0.50).clamp(380.0, 560.0);
+    final size = MediaQuery.of(context).size;
+    final isCompact = size.width < 600;
+    final yamHeight = (size.height * 0.46).clamp(340.0, 500.0);
     final displayed = _isHolding ? _holdYam : _yam;
+    final connected = _wsState == 'connected';
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FBFD),
+      backgroundColor: const Color(0xFFF6F8FA),
       appBar: AppBar(
-        elevation: 0,
-        backgroundColor: const Color(0xFFF9FBFD),
-        centerTitle: true,
-        shape: const Border(
-          bottom: BorderSide(
-            color: Color.fromARGB(255, 151, 198, 206),
-            width: 1.3,
-          ),
-        ),
-        title: Text(
-          'SOUND SENSE',
-          style: GoogleFonts.gowunDodum(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 1.5,
-            color: const Color(0xFF78B8C4),
-          ),
-        ),
+        titleSpacing: 20,
+        title: const BrandMark(),
         actions: [
+          ConnectionPill(connected: connected),
+          const SizedBox(width: 4),
           IconButton(
             tooltip: 'YOLO 결과 보기',
             onPressed: _openYoloPage,
-            icon: const Icon(Icons.photo_camera_outlined, color: Colors.grey),
+            icon: const Icon(Icons.photo_library_outlined),
+            color: const Color(0xFF475569),
           ),
+          const SizedBox(width: 8),
         ],
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(1),
+          child: Divider(height: 1, color: Color(0xFFE5EAF0)),
+        ),
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            const SizedBox(height: 12),
-            SizedBox(
-              height: yamHeight,
-              child: Center(
-                child: AnimatedOpacity(
-                  opacity: displayed != null ? 1.0 : 0.0,
-                  duration: const Duration(milliseconds: 180),
-                  child: SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    child: YamnetCard(event: displayed),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: isCompact ? 12 : 20),
+              child: Column(
+                children: [
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    height: yamHeight,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 220),
+                      switchInCurve: Curves.easeOut,
+                      switchOutCurve: Curves.easeIn,
+                      child: displayed != null
+                          ? KeyedSubtree(
+                              key: const ValueKey('yamnet'),
+                              child: YamnetCard(event: displayed),
+                            )
+                          : KeyedSubtree(
+                              key: const ValueKey('idle'),
+                              child: _IdleStatusCard(connected: connected),
+                            ),
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 20),
+                      child: ClovaPanel(event: _clova),
+                    ),
+                  ),
+                ],
               ),
             ),
-            Expanded(child: ClovaPanel(event: _clova)),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class BrandMark extends StatelessWidget {
+  const BrandMark({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(9),
+            gradient: const LinearGradient(
+              colors: [Color(0xFF0E9AAB), Color(0xFF18C0D2)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+          child: const Icon(
+            Icons.graphic_eq_rounded,
+            size: 18,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          'Sound Sense',
+          style: GoogleFonts.inter(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.2,
+            color: const Color(0xFF0F172A),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class ConnectionPill extends StatelessWidget {
+  const ConnectionPill({super.key, required this.connected});
+  final bool connected;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = connected ? const Color(0xFF10B981) : const Color(0xFFEAB308);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 7,
+              height: 7,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: color,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              connected ? 'LIVE' : 'CONNECTING',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
+                color: color,
+              ),
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _IdleStatusCard extends StatelessWidget {
+  const _IdleStatusCard({required this.connected});
+  final bool connected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFE5EAF0)),
+      ),
+      padding: const EdgeInsets.all(28),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 96,
+            height: 96,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: Color(0xFFE6F6F8),
+            ),
+            child: Icon(
+              connected ? Icons.hearing_outlined : Icons.wifi_tethering_rounded,
+              size: 44,
+              color: const Color(0xFF0E9AAB),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            connected ? '소리를 듣고 있어요' : '연결 중...',
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF0F172A),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            connected
+                ? '주변 소리를 감지하면 여기에 알려드릴게요'
+                : '서버에 연결하고 있습니다',
+            style: const TextStyle(
+              fontSize: 14,
+              color: Color(0xFF64748B),
+              height: 1.5,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
     );
   }

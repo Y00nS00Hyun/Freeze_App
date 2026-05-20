@@ -1,10 +1,10 @@
 // lib/pages/yolo_page.dart
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../models/events.dart';
 import '../utils/yolo_utils.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/yolo_card.dart';
+import 'event_viewer_page.dart' show BrandMark;
 
 class YoloPage extends StatefulWidget {
   const YoloPage({
@@ -171,39 +171,29 @@ class _YoloPageState extends State<YoloPage> {
 
   AppBar _buildAppBar() {
     return AppBar(
-      elevation: 0,
-      backgroundColor: const Color(0xFFF9FBFD),
-      centerTitle: true,
-      title: Text(
-        'SOUND SENSE',
-        style: GoogleFonts.gowunDodum(
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.5,
-          color: const Color(0xFF78B8C4),
-        ),
-      ),
-      iconTheme: const IconThemeData(color: Color(0xFF78B8C4)),
-      bottom: const PreferredSize(
-        preferredSize: Size.fromHeight(1.3),
-        child: ColoredBox(
-          color: Color.fromARGB(255, 151, 198, 206),
-          child: SizedBox(height: 1.3, width: double.infinity),
-        ),
-      ),
+      titleSpacing: 8,
+      title: const BrandMark(),
+      iconTheme: const IconThemeData(color: Color(0xFF475569)),
       actions: [
         IconButton(
           tooltip: '날짜 선택',
           onPressed: () => _pickDate(widget.items),
-          icon: const Icon(Icons.calendar_today_outlined, color: Colors.grey),
+          icon: const Icon(Icons.calendar_today_outlined),
+          color: const Color(0xFF475569),
         ),
         if (_selectedDate != null)
           IconButton(
             tooltip: '필터 해제',
             onPressed: () => setState(() => _selectedDate = null),
-            icon: const Icon(Icons.clear, color: Colors.grey),
+            icon: const Icon(Icons.filter_alt_off_outlined),
+            color: const Color(0xFF475569),
           ),
+        const SizedBox(width: 8),
       ],
+      bottom: const PreferredSize(
+        preferredSize: Size.fromHeight(1),
+        child: Divider(height: 1, color: Color(0xFFE5EAF0)),
+      ),
     );
   }
 
@@ -213,36 +203,48 @@ class _YoloPageState extends State<YoloPage> {
 
     if (rows.isEmpty) {
       return Scaffold(
-        backgroundColor: const Color(0xFFF9FBFD),
+        backgroundColor: const Color(0xFFF6F8FA),
         appBar: _buildAppBar(),
         body: const EmptyState(message: '현재 등록된 사진이 없습니다'),
       );
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FBFD),
+      backgroundColor: const Color(0xFFF6F8FA),
       appBar: _buildAppBar(),
-      body: Column(
-        children: [
-          if (_selectedDate != null) _SelectedDateChip(
-            date: _selectedDate!,
-            onClear: () => setState(() => _selectedDate = null),
-          ),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: rows.length,
-              itemBuilder: (context, i) {
-                final row = rows[i];
-                return switch (row) {
-                  _HeaderRow(:final title) => _SectionHeader(title: title),
-                  _CardRow(:final imageUrl, :final linkUrl, :final fileName) =>
-                    YoloCard(imageUrl: imageUrl, linkUrl: linkUrl, fileName: fileName),
-                };
-              },
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: Column(
+              children: [
+                if (_selectedDate != null)
+                  _SelectedDateChip(
+                    date: _selectedDate!,
+                    onClear: () => setState(() => _selectedDate = null),
+                  ),
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                    itemCount: rows.length,
+                    itemBuilder: (context, i) {
+                      final row = rows[i];
+                      return switch (row) {
+                        _HeaderRow(:final title) => _SectionHeader(title: title),
+                        _CardRow(:final imageUrl, :final linkUrl, :final fileName) =>
+                          YoloCard(
+                            imageUrl: imageUrl,
+                            linkUrl: linkUrl,
+                            fileName: fileName,
+                          ),
+                      };
+                    },
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -255,15 +257,28 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 8, bottom: 6),
-      child: Text(
-        title,
-        style: GoogleFonts.gowunDodum(
-          fontSize: 19,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.5,
-          color: const Color.fromARGB(255, 50, 50, 50),
-        ),
+      padding: const EdgeInsets.fromLTRB(4, 18, 4, 8),
+      child: Row(
+        children: [
+          Container(
+            width: 4,
+            height: 18,
+            decoration: BoxDecoration(
+              color: const Color(0xFF0E9AAB),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
+              color: Color(0xFF0F172A),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -278,15 +293,51 @@ class _SelectedDateChip extends StatelessWidget {
   Widget build(BuildContext context) {
     String two(int v) => v.toString().padLeft(2, '0');
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
       child: Align(
         alignment: Alignment.centerLeft,
-        child: Chip(
-          label: Text('${date.year}-${two(date.month)}-${two(date.day)} 선택됨'),
-          deleteIcon: const Icon(Icons.close),
-          onDeleted: onClear,
-          backgroundColor: const Color(0xFFE8F4F7),
-          side: const BorderSide(color: Color(0xFFB7D7DE)),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onClear,
+            borderRadius: BorderRadius.circular(999),
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 8,
+              ),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE6F6F8),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: const Color(0xFFB7D7DE)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.calendar_today_rounded,
+                    size: 14,
+                    color: Color(0xFF0E9AAB),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${date.year}.${two(date.month)}.${two(date.day)}',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF0E9AAB),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(
+                    Icons.close_rounded,
+                    size: 14,
+                    color: Color(0xFF0E9AAB),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );

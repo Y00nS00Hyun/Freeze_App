@@ -3,13 +3,12 @@ import 'package:url_launcher/url_launcher.dart';
 
 /// 공용 YOLO 카드
 /// - 이미지 로드 성공 시에만 렌더링(프로빙)
-/// - 아래 메타(라벨/칩)는 숨김, '다운로드 하기' 버튼만 유지
 class YoloCard extends StatefulWidget {
   const YoloCard({
     super.key,
-    required this.imageUrl, // 실제 썸네일/이미지 URL (필수)
-    this.fileName, // 상단에 표시(클릭 시 링크 열기)
-    this.linkUrl, // '다운로드 하기' 및 탭 시 열 링크(없으면 imageUrl 사용)
+    required this.imageUrl,
+    this.fileName,
+    this.linkUrl,
   });
 
   final String imageUrl;
@@ -100,69 +99,66 @@ class _YoloCardState extends State<YoloCard> {
 
     final hasLink = _hasLink;
 
-    return Card(
-      elevation: 4,
-      color: Colors.white,
-      surfaceTintColor: Colors.transparent,
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE5EAF0)),
+      ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 18, 16, 20),
+        padding: const EdgeInsets.all(14),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (widget.fileName != null && widget.fileName!.isNotEmpty) ...[
-              InkWell(
-                onTap: hasLink ? () => _openExternal(context) : null,
-                borderRadius: BorderRadius.circular(6),
-                child: Text(
-                  widget.fileName!,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 18,
-                    color: hasLink ? const Color(0xFF78B8C4) : Colors.grey,
-                    decoration: hasLink
-                        ? TextDecoration.underline
-                        : TextDecoration.none,
-                    decorationColor: const Color(0xFF78B8C4),
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
             GestureDetector(
               onTap: hasLink ? () => _openExternal(context) : null,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: const Color.fromARGB(255, 190, 213, 215),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                padding: const EdgeInsets.all(12),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: AspectRatio(
-                    aspectRatio: 1,
-                    child: Image.network(widget.imageUrl, fit: BoxFit.cover),
-                  ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: AspectRatio(
+                  aspectRatio: 16 / 11,
+                  child: Image.network(widget.imageUrl, fit: BoxFit.cover),
                 ),
               ),
             ),
             const SizedBox(height: 12),
-            if (hasLink)
-              TextButton.icon(
-                onPressed: () => _openExternal(context),
-                icon: const Icon(Icons.open_in_new, color: Color(0xFF78B8C4)),
-                label: const Text(
-                  '다운로드 하기',
-                  style: TextStyle(color: Color(0xFF78B8C4)),
-                ),
-                style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF78B8C4),
-                ),
-              ),
-            // ⬆️ 버튼만 유지, 그 외 라벨/칩 등은 렌더링하지 않음
+            Row(
+              children: [
+                if (widget.fileName != null && widget.fileName!.isNotEmpty)
+                  Expanded(
+                    child: Text(
+                      widget.fileName!,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF64748B),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                if (hasLink)
+                  TextButton.icon(
+                    onPressed: () => _openExternal(context),
+                    icon: const Icon(Icons.download_rounded, size: 16),
+                    label: const Text('다운로드'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF0E9AAB),
+                      backgroundColor: const Color(0xFFE6F6F8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ],
         ),
       ),

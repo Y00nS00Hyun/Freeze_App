@@ -181,68 +181,264 @@ class _YamnetCardState extends State<YamnetCard>
     final titleText = effectiveIsDanger
         ? (_isDelayActive && isNonDanger ? (_lastDangerKo ?? ko) : ko)
         : '안전';
-    final titleColor =
-        effectiveIsDanger ? Colors.redAccent : const Color(0xFF3BB273);
 
-    final mainSymbol = effectiveIsDanger
-        ? const Icon(
-            Icons.warning_amber_rounded,
-            color: Color.fromARGB(255, 255, 4, 0),
-            size: 80,
-          )
-        : const Icon(Icons.check_circle, color: Color(0xFF3BB273), size: 80);
+    final accent = effectiveIsDanger
+        ? const Color(0xFFE11D48)
+        : const Color(0xFF10B981);
+    final accentSoft = effectiveIsDanger
+        ? const Color(0xFFFEF1F3)
+        : const Color(0xFFE8F8F1);
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFE5EAF0)),
+        boxShadow: [
+          BoxShadow(
+            color: accent.withValues(alpha: 0.06),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.fromLTRB(24, 22, 24, 24),
       child: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 320),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              mainSymbol,
-              const SizedBox(height: 12),
-              Text(
-                titleText,
-                style: TextStyle(
-                  fontSize: 48,
-                  fontWeight: FontWeight.w800,
-                  color: titleColor,
-                ),
-                textAlign: TextAlign.center,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _StatusPill(
+              text: effectiveIsDanger ? '위험 감지' : '안전 상태',
+              color: accent,
+              soft: accentSoft,
+            ),
+            const SizedBox(height: 18),
+            _PulseIcon(
+              color: accent,
+              soft: accentSoft,
+              isDanger: effectiveIsDanger,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              titleText,
+              style: TextStyle(
+                fontSize: 34,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+                color: accent,
               ),
-              const SizedBox(height: 30),
-              if (dirDeg != null) ...[
-                const Text(
-                  '방향 정보',
-                  style: TextStyle(fontSize: 30, color: Colors.black87),
+              textAlign: TextAlign.center,
+            ),
+            if (dirDeg != null) ...[
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 14,
                 ),
-                const SizedBox(height: 25),
-                Transform(
-                  alignment: Alignment.center,
-                  transform: Matrix4.identity()
-                    ..rotateZ(-(dirDeg + 90) * math.pi / 180.0),
-                  child: Container(
-                    width: 120,
-                    height: 120,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Color(0xFFB3E5EB),
-                    ),
-                    child: const Icon(
-                      Icons.arrow_forward_rounded,
-                      size: 60,
-                      color: Colors.white,
-                    ),
-                  ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF6F8FA),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: const Color(0xFFE5EAF0)),
                 ),
-                const SizedBox(height: 16),
-              ],
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _Compass(angleDeg: dirDeg, color: accent),
+                    const SizedBox(width: 16),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          '방향',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.6,
+                            color: Color(0xFF94A3B8),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${dirDeg.toStringAsFixed(0)}°',
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ],
-          ),
+          ],
         ),
+      ),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({
+    required this.text,
+    required this.color,
+    required this.soft,
+  });
+  final String text;
+  final Color color;
+  final Color soft;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: soft,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: color,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.4,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PulseIcon extends StatefulWidget {
+  const _PulseIcon({
+    required this.color,
+    required this.soft,
+    required this.isDanger,
+  });
+  final Color color;
+  final Color soft;
+  final bool isDanger;
+
+  @override
+  State<_PulseIcon> createState() => _PulseIconState();
+}
+
+class _PulseIconState extends State<_PulseIcon>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    );
+    if (widget.isDanger) _ctrl.repeat();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PulseIcon oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isDanger && !_ctrl.isAnimating) {
+      _ctrl.repeat();
+    } else if (!widget.isDanger && _ctrl.isAnimating) {
+      _ctrl.stop();
+      _ctrl.reset();
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 132,
+      height: 132,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          if (widget.isDanger)
+            AnimatedBuilder(
+              animation: _ctrl,
+              builder: (_, __) {
+                final t = _ctrl.value;
+                final size = 96 + t * 36;
+                return Container(
+                  width: size,
+                  height: size,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: widget.color.withValues(alpha: (1 - t) * 0.22),
+                  ),
+                );
+              },
+            ),
+          Container(
+            width: 96,
+            height: 96,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: widget.soft,
+            ),
+            child: Icon(
+              widget.isDanger
+                  ? Icons.warning_amber_rounded
+                  : Icons.shield_outlined,
+              color: widget.color,
+              size: 52,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Compass extends StatelessWidget {
+  const _Compass({required this.angleDeg, required this.color});
+  final double angleDeg;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 72,
+      height: 72,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFE5EAF0), width: 1.5),
+      ),
+      alignment: Alignment.center,
+      child: Transform(
+        alignment: Alignment.center,
+        transform: Matrix4.identity()
+          ..rotateZ(-(angleDeg + 90) * math.pi / 180.0),
+        child: Icon(Icons.arrow_forward_rounded, color: color, size: 34),
       ),
     );
   }
