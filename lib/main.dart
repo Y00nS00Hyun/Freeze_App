@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -19,8 +20,10 @@ Future<void> main() async {
     ),
   );
 
-  // 로컬 알림 초기화
-  await NotiService.I.init();
+  // 로컬 알림 초기화 (웹은 미지원이라 건너뜀)
+  if (!kIsWeb) {
+    await NotiService.I.init();
+  }
 
   runApp(const MyApp());
 }
